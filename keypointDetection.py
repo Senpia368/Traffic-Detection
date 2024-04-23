@@ -6,14 +6,14 @@ import requests
 import torch
 import openpifpaf
 import cv2
-import numpy as np
 import matplotlib.pyplot as plt
 import os
 
 from keypointPlotter import KeyPointPlotter
+from openpifpaf.show.painters import KeypointPainter, CrowdPainter, DetectionPainter
 
-video_name = "Highway_clip.mp4"
-output_video_name = "Highway_clip_Keypoints1.mp4"
+video_name = "Albany@GeorgeNorth.mp4"
+output_video_name = "Albany@GeorgeNorth_CarKp.mp4"
 
 
 cap = cv2.VideoCapture(video_name)
@@ -23,15 +23,23 @@ frame_height = int(cap.get(4))
 fps = cap.get(cv2.CAP_PROP_FPS)
 print(fps)
 fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-#out = cv2.VideoWriter(output_video_name, fourcc=fourcc, fps=8, frameSize=(frame_width,frame_height))
+out = cv2.VideoWriter(output_video_name, fourcc=fourcc, fps=10, frameSize=(frame_width,frame_height))
 
 length = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
 success = True
 num_frame = 0
 
-predictor = openpifpaf.Predictor(checkpoint='shufflenetv2k16-apollo-24')
+PAINTERS = {
+    'Annotation': KeypointPainter(line_width=1.0),
+    'AnnotationCrowd': CrowdPainter,
+    'AnnotationDet': DetectionPainter,
+}
 
+# predictor = openpifpaf.Predictor(checkpoint= 'shufflenetv2k16')
+predictor = openpifpaf.Predictor(checkpoint= 'shufflenetv2k30-apollo-66')
+
+annotation_painter = openpifpaf.show.AnnotationPainter(painters=PAINTERS)
 while(cap.isOpened()):
     success, frame = cap.read()
 
@@ -44,35 +52,31 @@ while(cap.isOpened()):
 
         
         predictions, gt_anns, image_meta = predictor.pil_image(img)
-        print(predictions.data[0])
+        # print(predictions)
 
-        # annotation_painter = openpifpaf.show.AnnotationPainter()
-        # with KeyPointPlotter.image(im) as ax:
-        #     annotation_painter.annotations(ax, predictions)
-
-        # buf = io.BytesIO()
-        # KeyPointPlotter.fig.savefig(buf, format='png')
-        # buf.seek(0)
-
-        # # Create a PIL image from the byte string
-        # img = Image.open(buf)
-        # # Display the image
-        # # img.show()
-
-        # # Convert PIL image to NumPy array
-        # np_image = np.array(img)
         
-        # # Convert from RGB to BGR (OpenCV uses BGR)
-        # bgr_image = cv2.cvtColor(np_image, cv2.COLOR_RGB2BGR)
-        
-        
-        # # Write the frame to the video file
-        # out.write(bgr_image)
-        # #cv2.imshow('IMG',bgr_image)
+        with KeyPointPlotter.image(im) as ax:
+            annotation_painter.annotations(ax, predictions)
+
+         # Convert image with keypoints back to OpenCV format
+        buf = io.BytesIO()
+        ax.figure.savefig(buf, format='png')
+        buf.seek(0)
+        img_with_keypoints = cv2.imdecode(np.frombuffer(buf.read(), np.uint8), 1)
+
+        # Resize image to match frame size
+        img_with_keypoints_resized = cv2.resize(img_with_keypoints, (frame_width, frame_height))
+
+        # Write frame to output video
+        out.write(img_with_keypoints_resized)
+        # cv2.imshow('IMG',img_with_keypoints_resized)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
         print(num_frame)
         num_frame += 1
 
-        if num_frame > 200:
+        if num_frame > 500:
             break
         
 
@@ -81,7 +85,8 @@ while(cap.isOpened()):
 
 
 cap.release()
-#out.release()
+out.release()
+cv2.destroyAllWindows()
 
 
 

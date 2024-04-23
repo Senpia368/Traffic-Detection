@@ -1,0 +1,90 @@
+from PIL import Image
+import numpy as np
+import PIL
+import torch
+import openpifpaf
+import cv2
+import matplotlib.pyplot as plt
+import os
+import pandas as pd
+
+from keypointPlotter import KeyPointPlotter
+
+video_name = "Highway_clip.mp4"
+
+
+cap = cv2.VideoCapture(video_name)
+frame_width = int(cap.get(3))
+frame_height = int(cap.get(4))
+
+success = True
+num_frame = 0
+
+predictor = openpifpaf.Predictor(checkpoint='shufflenetv2k16-apollo-24')
+print(predictor.device)
+
+# Dataframe to convert to csv
+column_names =['frame','id','x','y','confidence']
+df = pd.DataFrame(columns=column_names)
+
+while(cap.isOpened()):
+    success, frame = cap.read()
+
+    if success:
+        color_coverted = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        img = Image.fromarray(color_coverted)
+        im = np.asarray(img)
+        with openpifpaf.show.image_canvas(im) as ax:
+            pass
+
+        
+        predictions, gt_anns, image_meta = predictor.pil_image(img)
+
+        #plt.imshow(img)
+        id = [i for i in range(len(predictions))]
+        for i in range(len(predictions)):
+            num_points = len(predictions[i].data)
+            colors = [tuple(np.random.rand(3,)) for _ in range(num_points)]
+            
+            # Extract x and y coordinates from the ndarray
+            x_values = predictions[i].data[:, 0]
+            y_values = predictions[i].data[:, 1]
+            confidence = predictions[i].data[:, 2]
+            
+
+            for j in range(len(x_values)):
+                df.loc[len(df.index)] = [num_frame,id[i],x_values[j],y_values[j],confidence[j]]
+
+            
+            # Plot the data
+        #     plt.scatter(x_values, y_values, marker='o', color=colors)
+        # plt.title('NumPy ndarray Plot')
+        # plt.savefig('output.png')
+
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+        print(num_frame)
+        num_frame += 1
+
+        if num_frame > 200:
+            break
+        
+
+    else:
+        break
+
+
+cap.release()
+cv2.destroyAllWindows()
+
+# Save DataFrame to csvS
+df.to_csv('Human.csv', index=False)
+
+
+
+    
+    
+
+
+    
